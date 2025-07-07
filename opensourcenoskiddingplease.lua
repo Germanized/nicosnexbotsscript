@@ -1,17 +1,16 @@
 -- ================================================================================================================= --
 -- ||                                                                                                             || --
--- ||                                      Germanized's Nicos NXTBOTS Hecks (V8)                                          || --
+-- ||                                      Germanized's Custom Script (V9)                                          || --
 -- ||                                                                                                             || --
 -- ================================================================================================================= --
--- || V8 Final Changelog:
--- ||   - Critical Fix: "Remove Blur" now correctly disables DepthOfFieldEffect and BloomEffect in addition to BlurEffect.
--- ||   - The script now continuously force-disables these effects in the game loop to prevent them from being re-enabled.
--- ||   - Ensured all other features (Spinbot, Airstrafe, Third-Person) are stable.
+-- || V9 Final Changelog:
+-- ||   - Critical Fix: Re-implemented the missing Bot ESP logic. The toggle now correctly finds and shows bot icons.
+-- ||   - All previous fixes for Blur, Third-Person, Spinbot, Airstrafe, and WalkSpeed are retained.
 -- ================================================================================================================= --
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 
--- Clean up any and all old UIs to prevent conflicts.
+-- Clean up old UIs to prevent conflicts.
 pcall(function()
     if game.CoreGui:FindFirstChild("GermanizedNicos") then game.CoreGui.GermanizedNicos:Destroy() end
     if game.Players.LocalPlayer.PlayerGui:FindFirstChild("GermanizedNicos") then game.Players.LocalPlayer.PlayerGui:FindFirstChild("GermanizedNicos"):Destroy() end
@@ -53,7 +52,7 @@ update_original_properties()
 --//================================\\--
 --//        FLUENT UI SETUP         --//
 --//================================\\--
-local Window = Fluent:CreateWindow({ Title = "Germanized's Nico's Hecks", SubTitle = "V8 - Blur Fixed", TabWidth = 160, Size = UDim2.fromOffset(580, 520), Acrylic = true, Theme = "Dark", MinimizeKey = Enum.KeyCode.RightControl })
+local Window = Fluent:CreateWindow({ Title = "Germanized's Nico's Hecks", SubTitle = "V9 - Final", TabWidth = 160, Size = UDim2.fromOffset(580, 520), Acrylic = true, Theme = "Dark", MinimizeKey = Enum.KeyCode.RightControl })
 Window.Name = "GermanizedNicos"
 
 local Tabs = {
@@ -68,24 +67,37 @@ local Options = Fluent.Options
 
 -- Visuals Tab
 Tabs.Visuals:AddToggle("EnableBotESP", {Title = "Enable Bot ESP", Default = false}):OnChanged(function(enabled)
-    -- ESP Logic...
+    local bots_folder = Workspace:FindFirstChild("bots")
+    if not bots_folder then return Fluent:Notify({Title = "Error", Content = "Workspace.bots folder not found!"}) end
+    
+    local function set_esp(bot, state)
+        if bot and bot:FindFirstChild("HumanoidRootPart") and bot.HumanoidRootPart:FindFirstChild("icon") then
+            bot.HumanoidRootPart.icon.Enabled = state
+            bot.HumanoidRootPart.icon.AlwaysOnTop = state
+        end
+    end
+
+    for _, bot in pairs(bots_folder:GetChildren()) do
+        if bot:IsA("Model") then set_esp(bot, enabled) end
+    end
+    
+    if Connections.BotAdded then Connections.BotAdded:Disconnect() end
+    if enabled then
+        Connections.BotAdded = bots_folder.ChildAdded:Connect(function(bot)
+            if bot:IsA("Model") and Options.EnableBotESP.Value then task.wait(0.1); set_esp(bot, true); end
+        end)
+    end
 end)
 Tabs.Visuals:AddToggle("RemoveBlur", {Title = "Remove All Post-Processing", Default = false}):OnChanged(function(enabled)
-    if enabled then
-        update_original_properties() -- Cache original states on enable
-        for effect, _ in pairs(original_properties.lighting_effects) do
-            if effect and effect.Parent then effect.Enabled = false end
-        end
-    else
-        for effect, original_state in pairs(original_properties.lighting_effects) do
-            if effect and effect.Parent then effect.Enabled = original_state end
-        end
+    if enabled then update_original_properties() end
+    for effect, original_state in pairs(original_properties.lighting_effects) do
+        if effect and effect.Parent then effect.Enabled = enabled and false or original_state end
     end
 end)
 Tabs.Visuals:AddToggle("ThirdPerson", {Title = "Enable Third Person", Default = false}):OnChanged(function(enabled)
     is_third_person = enabled
 end)
-Tabs.Visuals:AddParagraph({Title = "Important:", Content = "Third person mode requires a character reset to apply correctly, MAKE SURE TO NOT EXEC IN MENU ONLY IN GAME."})
+Tabs.Visuals:AddParagraph({Title = "Important:", Content = "Third person mode requires a character reset to apply correctly, also only execute in game not in the menu."})
 local fov_slider = Tabs.Visuals:AddSlider("FovChanger", { Title = "Camera FOV", Default = original_properties.fov, Min = 1, Max = 120, Rounding = 0})
 Tabs.Visuals:AddButton({Title = "Reset FOV", Callback = function() fov_slider:SetValue(original_properties.fov) end})
 
@@ -102,39 +114,43 @@ Tabs.Misc:AddParagraph({Title = "Camera Follow Tip", Content = "For a shift-lock
 -- Settings Tab
 Tabs.Settings:AddParagraph({Title = "Credits", Content = "Script by Germanized"})
 SaveManager:SetLibrary(Fluent); InterfaceManager:SetLibrary(Fluent)
-SaveManager:SetFolder("NicosScript/Final_v8"); InterfaceManager:SetFolder("NicosScript/Final_v8")
+SaveManager:SetFolder("NicosScript/Final_v9"); InterfaceManager:SetFolder("NicosScript/Final_v9")
 SaveManager:IgnoreThemeSettings(); InterfaceManager:BuildInterfaceSection(Tabs.Settings); SaveManager:BuildConfigSection(Tabs.Settings)
 
 --//========================== MAIN GAME LOOP & LOGIC ==========================//--
 
--- Handle disabling custom camera scripts
-local function manage_character_scripts(char, third_person_enabled)
+local function manage_character_scripts(char)
+    if not char then return end
     pcall(function()
+        local enabled = Options.ThirdPerson and Options.ThirdPerson.Value or false
         for _, obj in ipairs(char:GetDescendants()) do
-            if obj:IsA("LocalScript") and obj.Name:lower():match("firstperson") then obj.Disabled = third_person_enabled end
+            if obj:IsA("LocalScript") and obj.Name:lower():match("firstperson") then
+                obj.Disabled = enabled
+            end
         end
+        Camera.CameraSubject = enabled and char:WaitForChild("Humanoid") or nil
     end)
-    Camera.CameraSubject = third_person_enabled and char:WaitForChild("Humanoid") or nil
 end
 
 LocalPlayer.CharacterAdded:Connect(function(char)
     update_original_properties()
-    manage_character_scripts(char, Options.ThirdPerson.Value)
+    manage_character_scripts(char)
 end)
 
--- Main logic loop
 local spin_angle, spin_speed = 0, 45
-RunService.RenderStepped:Connect(function(dt)
+RunService:BindToRenderStep("GermanizedLoop", Enum.RenderPriority.Camera.Value + 1, function(dt)
     pcall(function()
         local char, humanoid = get_character_humanoid()
         if not humanoid or humanoid.Health <= 0 then return end
         
         -- Apply continuous properties
         humanoid.WalkSpeed = Options.SpeedChanger.Value
-        if Options.ThirdPerson.Value then Camera.FieldOfView = Options.FovChanger.Value
-        elseif Camera.FieldOfView ~= original_properties.fov then Camera.FieldOfView = original_properties.fov end
+        if Options.ThirdPerson.Value then
+            Camera.FieldOfView = Options.FovChanger.Value
+        elseif Camera.FieldOfView ~= original_properties.fov then
+            Camera.FieldOfView = original_properties.fov
+        end
 
-        -- Force-disable post-processing effects
         if Options.RemoveBlur.Value then
             for _, v in ipairs(Lighting:GetChildren()) do
                 if (v:IsA("BlurEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("BloomEffect")) and v.Enabled then
@@ -142,12 +158,12 @@ RunService.RenderStepped:Connect(function(dt)
                 end
             end
         end
-
-        -- Spinbot state
-        humanoid.AutoRotate = not Options.Spinbot.Value
+        
+        -- Feature logic
         if Options.Spinbot.Value then
-            local root = char.HumanoidRootPart
+            local root = char:FindFirstChild("HumanoidRootPart")
             if root then
+                humanoid.AutoRotate = false
                 local cam_cframe = Camera.CFrame
                 spin_angle = (spin_angle + dt * spin_speed) % (math.pi * 2)
                 local pitch = 0
@@ -155,16 +171,17 @@ RunService.RenderStepped:Connect(function(dt)
                 root.CFrame = CFrame.new(root.Position) * CFrame.fromOrientation(0, spin_angle, pitch)
                 if not Options.ThirdPerson.Value then Camera.CFrame = cam_cframe end
             end
+        else
+            if not humanoid.AutoRotate then humanoid.AutoRotate = true end
         end
-
-        -- Air Strafe
+        
         if Options.Airstrafe.Value and humanoid:GetState() == Enum.HumanoidStateType.Freefall then
             local root = char.HumanoidRootPart
             if root then
-                local strafe_dir = Vector3.new()
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then strafe_dir += Camera.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then strafe_dir -= Camera.CFrame.RightVector end
-                if strafe_dir.Magnitude > 0 then root.Velocity += Vector3.new(strafe_dir.X, 0, strafe_dir.Z).Unit * 120 * dt end
+                local strafe_vector = Vector3.new()
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then strafe_vector += Camera.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then strafe_vector -= Camera.CFrame.RightVector end
+                if strafe_vector.Magnitude > 0 then root.Velocity += Vector3.new(strafe_vector.X, 0, strafe_vector.Z).Unit * 120 * dt end
             end
         end
     end)
@@ -173,5 +190,5 @@ end)
 
 --//========================== INITIALIZATION & NOTIFICATION ==========================//--
 Window:SelectTab(1)
-Fluent:Notify({Title = "Germanized's Nico NXBTS Hecks", Content = "V8 Loaded | Blur Fixed!", Duration = 5})
+Fluent:Notify({Title = "Germanized's Nico Hacks", Content = "V9 | Bot ESP Fixed!", Duration = 5})
 pcall(SaveManager.LoadAutoloadConfig, SaveManager)
