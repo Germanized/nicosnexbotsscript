@@ -53,7 +53,7 @@ update_original_properties()
 --//================================\\--
 --//        FLUENT UI SETUP         --//
 --//================================\\--
-local Window = Fluent:CreateWindow({ Title = "Germanized's Project", SubTitle = "V8 - Blur Fixed", TabWidth = 160, Size = UDim2.fromOffset(580, 520), Acrylic = true, Theme = "Dark", MinimizeKey = Enum.KeyCode.RightControl })
+local Window = Fluent:CreateWindow({ Title = "Germanized's Nico's Hecks", SubTitle = "V8 - Blur Fixed", TabWidth = 160, Size = UDim2.fromOffset(580, 520), Acrylic = true, Theme = "Dark", MinimizeKey = Enum.KeyCode.RightControl })
 Window.Name = "GermanizedNicos"
 
 local Tabs = {
