@@ -85,7 +85,7 @@ end)
 Tabs.Visuals:AddToggle("ThirdPerson", {Title = "Enable Third Person", Default = false}):OnChanged(function(enabled)
     is_third_person = enabled
 end)
-Tabs.Visuals:AddParagraph({Title = "Important:", Content = "Third person mode requires a character reset to apply correctly."})
+Tabs.Visuals:AddParagraph({Title = "Important:", Content = "Third person mode requires a character reset to apply correctly, MAKE SURE TO NOT EXEC IN MENU ONLY IN GAME."})
 local fov_slider = Tabs.Visuals:AddSlider("FovChanger", { Title = "Camera FOV", Default = original_properties.fov, Min = 1, Max = 120, Rounding = 0})
 Tabs.Visuals:AddButton({Title = "Reset FOV", Callback = function() fov_slider:SetValue(original_properties.fov) end})
 
